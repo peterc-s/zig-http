@@ -63,13 +63,39 @@ const HTTPServer = struct {
         }
     }
 
+    /// Parses a request.
     fn parse(data: []u8) !void {
         var data_str = try String.init_with_contents(std.heap.page_allocator, data);
 
+        // to remove any ambiguity
         _ = try data_str.replace("\r\n", "\n");
-        _ = try data_str.replace(&[1]u8{170}, &[0]u8{});
 
-        std.debug.print("{s}\n", .{data_str.buffer.?});
+        std.debug.print("{s}\n", .{data_str.str()});
+
+        const lines_arr = try getLines(&data_str);
+
+        try printLines(lines_arr);
+    }
+
+    /// Takes a String and returns a slice of Strings containing each line.
+    /// Should be replaced when this method is merged upstream in zig-string
+    fn getLines(str: *String) ![]String {
+        var line_arr = std.ArrayList(String).init(std.heap.page_allocator);
+        defer line_arr.deinit();
+
+        var i: usize = 0;
+        while (try str.splitToString("\n", i)) |line| : (i += 1) {
+            try line_arr.append(line);
+        }
+
+        return try line_arr.toOwnedSlice();
+    }
+
+    /// DEBUG: Print each line in a []String separately and numbered.
+    fn printLines(str_arr: []String) !void {
+        for (str_arr, 0..) |line, index| {
+            std.debug.print("Line {d}: {s}\n", .{ index, line.str() });
+        }
     }
 
     /// Handle an incoming request from a client
