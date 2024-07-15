@@ -4,13 +4,10 @@ const network = @import("network");
 const BUF_SIZE = 1024;
 
 /// Enum of HTTP status codes.
-const Status = enum {
-    /// 200
-    OK,
-    /// 404
-    NOT_FOUND,
-    /// 501
-    NOT_IMPLEMENTED,
+const Status = enum(u16) {
+    OK = 200,
+    NOT_FOUND = 404,
+    NOT_IMPLEMENTED = 501,
 };
 
 /// Contains methods for running a HTTP server
@@ -78,7 +75,7 @@ const HTTPServer = struct {
             \\</html>
         ;
 
-        const response = try std.fmt.allocPrint(allocator, "{s}{s}\r\n\r\n{s}", .{ response_line, headers, response_body });
+        const response = try std.fmt.allocPrint(allocator, "{s}{s}\r\n{s}", .{ response_line, headers, response_body });
 
         _ = try client.send(response);
 
@@ -88,6 +85,11 @@ const HTTPServer = struct {
     /// Adds or modifies a header, just a wrapper around self.headers.put().
     pub fn addHeader(self: *HTTPServer, key: []const u8, value: []const u8) !void {
         try self.headers.put(key, @constCast(value));
+    }
+
+    /// Removes a header with specified key.
+    pub fn removeHeader(self: *HTTPServer, key: []const u8) bool {
+        return self.headers.remove(key);
     }
 
     /// Compiles a string of the headers in the correct format for a HTTP
