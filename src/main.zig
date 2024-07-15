@@ -1,5 +1,6 @@
 const std = @import("std");
 const network = @import("network");
+const String = @import("string").String;
 
 const BUF_SIZE = 1024;
 
@@ -8,6 +9,11 @@ const Status = enum(u16) {
     OK = 200,
     NOT_FOUND = 404,
     NOT_IMPLEMENTED = 501,
+};
+
+/// Enum of supported HTTP methods.
+const Method = enum {
+    GET,
 };
 
 /// Contains methods for running a HTTP server
@@ -57,9 +63,18 @@ const HTTPServer = struct {
         }
     }
 
+    fn parse(data: []u8) !void {
+        var data_str = try String.init_with_contents(std.heap.page_allocator, data);
+
+        _ = try data_str.replace("\r\n", "\n");
+        _ = try data_str.replace(&[1]u8{170}, &[0]u8{});
+
+        std.debug.print("{s}\n", .{data_str.buffer.?});
+    }
+
     /// Handle an incoming request from a client
     fn handle_request(self: HTTPServer, client: network.Socket, data: []u8) !void {
-        std.debug.print("{s}\n", .{std.mem.sliceTo(data[0..], 0)});
+        try parse(data);
 
         const allocator = std.heap.page_allocator;
 

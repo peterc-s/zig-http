@@ -17,6 +17,11 @@ pub fn build(b: *std.Build) void {
 
     const network = b.dependency("network", .{});
 
+    const string = b.dependency("string", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     // const lib = b.addStaticLibrary(.{
     //     .name = "zig-http",
     //     // In this case the main source file is merely a path, however, in more
@@ -39,6 +44,7 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.root_module.addImport("network", network.module("network"));
+    exe.root_module.addImport("string", string.module("string"));
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
