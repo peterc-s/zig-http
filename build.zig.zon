@@ -24,12 +24,12 @@
     // internet connectivity.
     .dependencies = .{
         .network = .{
-            .url = "https://github.com/MasterQ32/zig-network/archive/bcf6cc8918d574f947b2647522d84a805c33f1c8.tar.gz",
+            .url = "https://github.com/MasterQ32/zig-network/archive/refs/heads/master.tar.gz",
             .hash = "12203b3634f36570ffced059248bd429cd06dc89a98659c86569d890fdd99b5070bd",
         },
         .string = .{
             .url = "https://github.com/JakubSzark/zig-string/archive/refs/heads/master.tar.gz",
-            .hash = "1220fc05a513524010e93b4734392c728d5364fb6669b33cec9dae7225d56a5eedde",
+            .hash = "122054322f3d5a97d78feabae297612dcb994266e2b12cd9bedafc99a42f4a2a8c32",
         },
     },
     .paths = .{
