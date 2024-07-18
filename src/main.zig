@@ -14,6 +14,15 @@ const Status = enum(u16) {
 /// Enum of supported HTTP methods.
 const Method = enum {
     GET,
+    /// For any time there either isn't a method or it isn't supported.
+    UNKNOWN,
+};
+
+/// Defines the current config for a response.
+const Config = struct {
+    method: Method = Method.UNKNOWN,
+    uri: []const u8 = "",
+    http_vers: []const u8 = "HTTP/1.1",
 };
 
 /// Contains methods for running a HTTP server
@@ -22,21 +31,21 @@ const HTTPServer = struct {
     /// The port to run the server on.
     port: u16 = 8080,
     /// The headers currently being sent with responses.
-    headers: std.StringHashMap([]u8),
+    headers: std.StringHashMap([]u8) = undefined,
 
     /// Initialises a server struct with the specified port.
     pub fn init(port: u16) HTTPServer {
-        var _port = port;
-        if (_port == undefined) {
-            _port = 8080;
+        var server = HTTPServer{};
+
+        if (port == undefined) {
+            server.port = 8080;
+        } else {
+            server.port = port;
         }
 
-        const headers = std.StringHashMap([]u8).init(std.heap.page_allocator);
+        server.headers = std.StringHashMap([]u8).init(std.heap.page_allocator);
 
-        return HTTPServer{
-            .port = _port,
-            .headers = headers,
-        };
+        return server;
     }
 
     /// Starts running the server.
@@ -59,63 +68,95 @@ const HTTPServer = struct {
 
             if (len == 0) continue;
 
-            try self.handle_request(client, &recv_buf);
+            try handle_request(client, &recv_buf);
         }
     }
 
     /// Parses a request.
-    fn parse(data: []u8) !void {
+    fn parse(data: []u8) !Config {
         var data_str = try String.init_with_contents(std.heap.page_allocator, data);
 
-        // to remove any ambiguity
-        _ = try data_str.replace("\r\n", "\n");
-
-        std.debug.print("{s}\n", .{data_str.str()});
-
         const lines_arr = try data_str.lines();
+        const request_line = lines_arr[0];
+        const words = try request_line.splitAll(" ");
 
-        try printLines(lines_arr);
+        var config = Config{};
+        config.method = parse_method(words[0]);
+
+        if (words.len > 1) {
+            config.uri = words[1];
+        }
+
+        if (words.len > 2) {
+            config.http_vers = words[2];
+        }
+
+        return config;
+    }
+
+    /// Parses a method slice into a variant of the Method enum.
+    fn parse_method(method_str: []const u8) Method {
+        if (std.mem.eql(u8, method_str, "GET")) {
+            return Method.GET;
+        } else {
+            return Method.UNKNOWN;
+        }
     }
 
     /// DEBUG: Print each line in a []String separately and numbered.
-    fn printLines(str_arr: []String) !void {
+    fn print_lines(str_arr: []String) !void {
         for (str_arr, 0..) |line, index| {
             std.debug.print("Line {d}: {s}\n", .{ index, line.str() });
         }
     }
 
     /// Handle an incoming request from a client
-    fn handle_request(self: HTTPServer, client: network.Socket, data: []u8) !void {
-        try parse(data);
+    fn handle_request(client: network.Socket, data: []u8) !void {
+        const config = try parse(data);
 
-        const allocator = std.heap.page_allocator;
+        // check if method is supported or not and give
+        // appropriate response
+        _ = switch (config.method) {
+            Method.GET => handle_GET(client, config),
+            Method.UNKNOWN => handle_unknown(client, config),
+        };
 
-        const response_line = try get_response_line(Status.OK);
+        // const headers = try self.get_headers_str();
+        //
+        // const response_body =
+        //     \\<html>
+        //     \\<body>
+        //     \\<h1>Request Received!</h1>
+        //     \\</body>
+        //     \\</html>
+        // ;
+        //
+        // const response = try std.fmt.allocPrint(allocator, "{s}{s}\r\n{s}", .{ response_line, headers, response_body });
+        //
+        // _ = try client.send(response);
+        //
+        // std.debug.print("Sending response: \n{s}\n", .{response});
+    }
 
-        const headers = try self.get_headers_str();
+    /// Handles a GET request.
+    fn handle_GET(client: network.Socket, config: Config) void {
+        //todo
+        std.debug.print("Found GET from {any}: \n{any}\n", .{ client.endpoint, config });
+    }
 
-        const response_body =
-            \\<html>
-            \\<body>
-            \\<h1>Request Received!</h1>
-            \\</body>
-            \\</html>
-        ;
-
-        const response = try std.fmt.allocPrint(allocator, "{s}{s}\r\n{s}", .{ response_line, headers, response_body });
-
-        _ = try client.send(response);
-
-        std.debug.print("Sending response: \n{s}\n", .{response});
+    /// Handles a bad request
+    fn handle_unknown(client: network.Socket, config: Config) void {
+        //todo
+        std.debug.print("Unknown from {any}: \n{any}\n", .{ client.endpoint, config });
     }
 
     /// Adds or modifies a header, just a wrapper around self.headers.put().
-    pub fn addHeader(self: *HTTPServer, key: []const u8, value: []const u8) !void {
+    pub fn add_header(self: *HTTPServer, key: []const u8, value: []const u8) !void {
         try self.headers.put(key, @constCast(value));
     }
 
     /// Removes a header with specified key.
-    pub fn removeHeader(self: *HTTPServer, key: []const u8) bool {
+    pub fn remove_header(self: *HTTPServer, key: []const u8) bool {
         return self.headers.remove(key);
     }
 
@@ -159,8 +200,8 @@ pub fn main() !void {
 
     var serv = HTTPServer.init(8080);
 
-    try serv.addHeader("Server", "zig-http");
-    try serv.addHeader("Content-Type", "text/html");
+    try serv.add_header("Server", "zig-http");
+    try serv.add_header("Content-Type", "text/html");
 
     try serv.start();
 }
