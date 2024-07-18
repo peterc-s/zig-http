@@ -10,6 +10,23 @@ const Status = enum(u16) {
     NOT_FOUND = 404,
     INTERNAL_SERVER_ERROR = 500,
     NOT_IMPLEMENTED = 501,
+
+    /// Compiles a response line for the given status.
+    fn response_line(self: Status) ![]u8 {
+        const allocator = std.heap.page_allocator;
+
+        const http_prefix = "HTTP/1.1";
+        const status_str = switch (self) {
+            Status.OK => "200 OK",
+            Status.NOT_FOUND => "404 Not Found",
+            Status.INTERNAL_SERVER_ERROR => "500 Internal Server Error",
+            Status.NOT_IMPLEMENTED => "501 Not Implemented",
+        };
+
+        const result = try std.fmt.allocPrint(allocator, "{s} {s}\r\n", .{ http_prefix, status_str });
+
+        return result;
+    }
 };
 
 /// Enum of supported HTTP methods.
@@ -147,12 +164,12 @@ const HTTPServer = struct {
         var response_line: []u8 = undefined;
         var response_body: []u8 = undefined;
         if (file_content) |result| {
-            response_line = try get_response_line(Status.OK);
+            response_line = try Status.OK.response_line();
             response_body = result;
         } else |err| {
             response_line = switch (err) {
-                std.fs.File.OpenError.FileNotFound => try get_response_line(Status.NOT_FOUND),
-                else => try get_response_line(Status.INTERNAL_SERVER_ERROR),
+                std.fs.File.OpenError.FileNotFound => try Status.NOT_FOUND.response_line(),
+                else => try Status.INTERNAL_SERVER_ERROR.response_line(),
             };
             response_body = &[_]u8{};
         }
@@ -186,7 +203,7 @@ const HTTPServer = struct {
         //todo
         std.debug.print("Unknown from {any}: \n{any}\n", .{ client.endpoint, config });
 
-        const response_line = try get_response_line(Status.NOT_IMPLEMENTED);
+        const response_line = try Status.NOT_IMPLEMENTED.response_line();
         const headers_str = try self.get_headers_str(&[_]Header{});
 
         const response = try format_response(response_line, headers_str, "");
@@ -222,23 +239,6 @@ const HTTPServer = struct {
         }
 
         return try headers_str.toOwnedSlice();
-    }
-
-    /// Compiles a response line for the given status.
-    fn get_response_line(status: Status) ![]u8 {
-        const allocator = std.heap.page_allocator;
-
-        const http_prefix = "HTTP/1.1";
-        const status_str = switch (status) {
-            Status.OK => "200 OK",
-            Status.NOT_FOUND => "404 Not Found",
-            Status.INTERNAL_SERVER_ERROR => "500 Internal Server Error",
-            Status.NOT_IMPLEMENTED => "501 Not Implemented",
-        };
-
-        const response_line = try std.fmt.allocPrint(allocator, "{s} {s}\r\n", .{ http_prefix, status_str });
-
-        return response_line;
     }
 };
 
