@@ -26,13 +26,16 @@ const Config = struct {
     http_vers: []const u8 = "HTTP/1.1",
 };
 
+/// Defines a header tuple.
+const Header = std.meta.Tuple(&[_]type{ []const u8, []const u8 });
+
 /// Contains methods for running a HTTP server
 /// on a specified port.
 const HTTPServer = struct {
     /// The port to run the server on.
     port: u16 = 8080,
     /// The headers currently being sent with responses.
-    headers: std.StringHashMap([]u8) = undefined,
+    headers: std.ArrayList(Header) = undefined,
 
     /// Initialises a server struct with the specified port.
     pub fn init(port: u16) HTTPServer {
@@ -44,9 +47,13 @@ const HTTPServer = struct {
             server.port = port;
         }
 
-        server.headers = std.StringHashMap([]u8).init(std.heap.page_allocator);
+        server.headers = std.ArrayList(Header).init(std.heap.page_allocator);
 
         return server;
+    }
+
+    pub fn deinit(self: HTTPServer) void {
+        self.headers.deinit();
     }
 
     /// Starts running the server.
@@ -151,7 +158,7 @@ const HTTPServer = struct {
         }
         defer allocator.free(response_body);
 
-        const headers_str = try self.get_headers_str();
+        const headers_str = try self.get_headers_str(&[_]Header{});
 
         const response = try format_response(response_line, headers_str, @constCast(response_body));
 
@@ -180,7 +187,7 @@ const HTTPServer = struct {
         std.debug.print("Unknown from {any}: \n{any}\n", .{ client.endpoint, config });
 
         const response_line = try get_response_line(Status.NOT_IMPLEMENTED);
-        const headers_str = try self.get_headers_str();
+        const headers_str = try self.get_headers_str(&[_]Header{});
 
         const response = try format_response(response_line, headers_str, "");
 
@@ -189,27 +196,28 @@ const HTTPServer = struct {
         std.debug.print("Sending response: \n{s}\n", .{response});
     }
 
-    /// Adds or modifies a header, just a wrapper around self.headers.put().
+    /// Adds or modifies a header, just a wrapper around self.headers.append.
     pub fn add_header(self: *HTTPServer, key: []const u8, value: []const u8) !void {
-        try self.headers.put(key, @constCast(value));
-    }
-
-    /// Removes a header with specified key.
-    pub fn remove_header(self: *HTTPServer, key: []const u8) bool {
-        return self.headers.remove(key);
+        try self.headers.append(.{ key, value });
     }
 
     /// Compiles a string of the headers in the correct format for a HTTP
     /// response.
-    pub fn get_headers_str(self: HTTPServer) ![]u8 {
-        var iter = self.headers.iterator();
+    pub fn get_headers_str(self: HTTPServer, extra_headers: []Header) ![]u8 {
         var headers_str = std.ArrayList(u8).init(std.heap.page_allocator);
         defer headers_str.deinit();
 
-        while (iter.next()) |entry| {
-            try headers_str.appendSlice(entry.key_ptr.*);
+        for (self.headers.items) |entry| {
+            try headers_str.appendSlice(entry[0]);
             try headers_str.appendSlice(": ");
-            try headers_str.appendSlice(entry.value_ptr.*);
+            try headers_str.appendSlice(entry[1]);
+            try headers_str.appendSlice("\r\n");
+        }
+
+        for (extra_headers) |entry| {
+            try headers_str.appendSlice(entry[0]);
+            try headers_str.appendSlice(": ");
+            try headers_str.appendSlice(entry[1]);
             try headers_str.appendSlice("\r\n");
         }
 
@@ -239,6 +247,7 @@ pub fn main() !void {
     defer network.deinit();
 
     var serv = HTTPServer.init(8080);
+    defer serv.deinit();
 
     try serv.add_header("Server", "zig-http");
     try serv.add_header("Content-Type", "text/html");
