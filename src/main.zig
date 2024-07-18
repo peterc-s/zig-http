@@ -68,7 +68,7 @@ const HTTPServer = struct {
 
             if (len == 0) continue;
 
-            try handle_request(client, &recv_buf);
+            try self.handle_request(client, &recv_buf);
         }
     }
 
@@ -111,43 +111,57 @@ const HTTPServer = struct {
     }
 
     /// Handle an incoming request from a client
-    fn handle_request(client: network.Socket, data: []u8) !void {
+    fn handle_request(self: HTTPServer, client: network.Socket, data: []u8) !void {
         const config = try parse(data);
 
         // check if method is supported or not and give
         // appropriate response
         _ = switch (config.method) {
-            Method.GET => handle_GET(client, config),
-            Method.UNKNOWN => handle_unknown(client, config),
+            Method.GET => try self.handle_GET(client, config),
+            Method.UNKNOWN => try self.handle_unknown(client, config),
         };
+    }
 
-        // const headers = try self.get_headers_str();
-        //
-        // const response_body =
-        //     \\<html>
-        //     \\<body>
-        //     \\<h1>Request Received!</h1>
-        //     \\</body>
-        //     \\</html>
-        // ;
-        //
-        // const response = try std.fmt.allocPrint(allocator, "{s}{s}\r\n{s}", .{ response_line, headers, response_body });
-        //
-        // _ = try client.send(response);
-        //
-        // std.debug.print("Sending response: \n{s}\n", .{response});
+    fn format_response(response_line: []u8, headers_str: []u8, response_body: []u8) ![]u8 {
+        return try std.fmt.allocPrint(std.heap.page_allocator, "{s}{s}\r\n{s}", .{ response_line, headers_str, response_body });
     }
 
     /// Handles a GET request.
-    fn handle_GET(client: network.Socket, config: Config) void {
-        //todo
+    fn handle_GET(self: HTTPServer, client: network.Socket, config: Config) !void {
         std.debug.print("Found GET from {any}: \n{any}\n", .{ client.endpoint, config });
+
+        const response_line = try get_response_line(Status.OK);
+        const headers_str = try self.get_headers_str();
+
+        // todo: actually get the text from file
+        const response_body =
+            \\<html>
+            \\<body>
+            \\<h1>Request Received!</h1>
+            \\</body>
+            \\</html>
+        ;
+
+        const response = try format_response(response_line, headers_str, @constCast(response_body));
+
+        _ = try client.send(response);
+
+        std.debug.print("Sending response: \n{s}\n", .{response});
     }
 
     /// Handles a bad request
-    fn handle_unknown(client: network.Socket, config: Config) void {
+    fn handle_unknown(self: HTTPServer, client: network.Socket, config: Config) !void {
         //todo
         std.debug.print("Unknown from {any}: \n{any}\n", .{ client.endpoint, config });
+
+        const response_line = try get_response_line(Status.NOT_IMPLEMENTED);
+        const headers_str = try self.get_headers_str();
+
+        const response = try format_response(response_line, headers_str, "");
+
+        _ = try client.send(response);
+
+        std.debug.print("Sending response: \n{s}\n", .{response});
     }
 
     /// Adds or modifies a header, just a wrapper around self.headers.put().
