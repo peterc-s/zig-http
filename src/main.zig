@@ -8,6 +8,7 @@ const BUF_SIZE = 1024;
 const Status = enum(u16) {
     OK = 200,
     NOT_FOUND = 404,
+    INTERNAL_SERVER_ERROR = 500,
     NOT_IMPLEMENTED = 501,
 };
 
@@ -128,25 +129,49 @@ const HTTPServer = struct {
 
     /// Handles a GET request.
     fn handle_GET(self: HTTPServer, client: network.Socket, config: Config) !void {
-        std.debug.print("Found GET from {any}: \n{any}\n", .{ client.endpoint, config });
+        std.debug.print("Found GET from {any}: \n{any}\n", .{ client.getLocalEndPoint(), config });
+        std.debug.print("Get file: {s}\n", .{config.uri});
 
-        const response_line = try get_response_line(Status.OK);
+        const allocator = std.heap.page_allocator;
+
+        // read the file from the uri
+        const file_content = read_file(allocator, config.uri);
+
+        var response_line: []u8 = undefined;
+        var response_body: []u8 = undefined;
+        if (file_content) |result| {
+            response_line = try get_response_line(Status.OK);
+            response_body = result;
+        } else |err| {
+            response_line = switch (err) {
+                std.fs.File.OpenError.FileNotFound => try get_response_line(Status.NOT_FOUND),
+                else => try get_response_line(Status.INTERNAL_SERVER_ERROR),
+            };
+            response_body = &[_]u8{};
+        }
+        defer allocator.free(response_body);
+
         const headers_str = try self.get_headers_str();
-
-        // todo: actually get the text from file
-        const response_body =
-            \\<html>
-            \\<body>
-            \\<h1>Request Received!</h1>
-            \\</body>
-            \\</html>
-        ;
 
         const response = try format_response(response_line, headers_str, @constCast(response_body));
 
         _ = try client.send(response);
 
         std.debug.print("Sending response: \n{s}\n", .{response});
+    }
+
+    /// Reads a file and outputs it's contents.
+    fn read_file(allocator: std.mem.Allocator, relative_path: []const u8) ![]u8 {
+        const open_flags = std.fs.File.OpenFlags{
+            .mode = .read_only,
+        };
+
+        const file = try std.fs.cwd().openFile(relative_path[1..], open_flags);
+
+        const max_size = std.math.maxInt(usize);
+        const data = try file.readToEndAlloc(allocator, max_size);
+
+        return data;
     }
 
     /// Handles a bad request
@@ -199,6 +224,7 @@ const HTTPServer = struct {
         const status_str = switch (status) {
             Status.OK => "200 OK",
             Status.NOT_FOUND => "404 Not Found",
+            Status.INTERNAL_SERVER_ERROR => "500 Internal Server Error",
             Status.NOT_IMPLEMENTED => "501 Not Implemented",
         };
 
