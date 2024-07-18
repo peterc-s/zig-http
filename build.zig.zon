@@ -29,7 +29,7 @@
         },
         .string = .{
             .url = "https://github.com/JakubSzark/zig-string/archive/refs/heads/master.tar.gz",
-            .hash = "122054322f3d5a97d78feabae297612dcb994266e2b12cd9bedafc99a42f4a2a8c32",
+            .hash = "12205b8ff9859b8227e5643dfc179033cfff3f422e9399a83ad9d34346c305a642a5",
         },
     },
     .paths = .{
