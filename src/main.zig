@@ -1,6 +1,7 @@
 const std = @import("std");
 const network = @import("network");
 const String = @import("string").String;
+const mime = @import("mime.zig");
 
 const BUF_SIZE = 1024;
 
@@ -44,101 +45,6 @@ const Config = struct {
     uri: []const u8 = "",
     http_vers: []const u8 = "HTTP/1.1",
 };
-
-/// Defines a MIME type typle.
-const MIMEType = std.meta.Tuple(&[_]type{ []const u8, []const u8 });
-/// Defines the MIME types as a slice of MIMEType tuples.
-const MIMETypes: []const MIMEType = &[_]MIMEType{
-    .{ ".aac", "audio/aac" },
-    .{ ".abw", "application/x-abiword" },
-    .{ ".apng", "image/apng" },
-    .{ ".arc", "application/x-freearc" },
-    .{ ".avif", "image/avif" },
-    .{ ".avi", "video/x-msvideo" },
-    .{ ".azw", "application/vnd.amazon.ebook" },
-    .{ ".bin", "application/octet-stream" },
-    .{ ".bmp", "image/bmp" },
-    .{ ".bz", "application/x-bzip" },
-    .{ ".bz2", "application/x-bzip2" },
-    .{ ".cda", "application/x-cdf" },
-    .{ ".csh", "application/x-csh" },
-    .{ ".css", "text/css" },
-    .{ ".csv", "text/csv" },
-    .{ ".doc", "application/msword" },
-    .{ ".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
-    .{ ".eot", "application/vnd.ms-fontobject" },
-    .{ ".epub", "application/epub+zip" },
-    .{ ".gz", "application/gzip" },
-    .{ ".gif", "image/gif" },
-    .{ ".htm", "text/html" },
-    .{ ".html", "text/html" },
-    .{ ".ico", "image/vnd.microsoft.icon" },
-    .{ ".ics", "text/calendar" },
-    .{ ".jar", "application/java-archive" },
-    .{ ".jpg", "image/jpeg" },
-    .{ ".jpeg", "image/jpeg" },
-    .{ ".js", "text/javascript " },
-    .{ ".json", "application/json" },
-    .{ ".jsonld", "application/ld+json" },
-    .{ ".midi", "audio/midi, audio/midi" },
-    .{ ".mid", "audio/midi, audio/x-midi" },
-    .{ ".mjs", "text/javascript" },
-    .{ ".mp3", "audio/mpeg" },
-    .{ ".mp4", "video/mp4" },
-    .{ ".mpeg", "video/mpeg" },
-    .{ ".mpkg", "application/vnd.apple.installer+xml" },
-    .{ ".odp", "application/vnd.oasis.opendocument.presentation" },
-    .{ ".ods", "application/vnd.oasis.opendocument.spreadsheet" },
-    .{ ".odt", "application/vnd.oasis.opendocument.text" },
-    .{ ".oga", "audio/ogg" },
-    .{ ".ogv", "video/ogg" },
-    .{ ".ogx", "application/ogg" },
-    .{ ".opus", "audio/ogg" },
-    .{ ".otf", "font/otf" },
-    .{ ".png", "image/png" },
-    .{ ".pdf", "application/pdf" },
-    .{ ".php", "application/x-httpd-php" },
-    .{ ".ppt", "application/vnd.ms-powerpoint" },
-    .{ ".pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation" },
-    .{ ".rar", "application/vnd.rar" },
-    .{ ".rtf", "application/rtf" },
-    .{ ".sh", "application/x-sh" },
-    .{ ".svg", "image/svg+xml" },
-    .{ ".tar", "application/x-tar" },
-    .{ ".tif", "image/tiff" },
-    .{ ".tiff", "image/tiff" },
-    .{ ".ts", "video/mp2t" },
-    .{ ".ttf", "font/ttf" },
-    .{ ".txt", "text/plain" },
-    .{ ".vsd", "application/vnd.visio" },
-    .{ ".wav", "audio/wav" },
-    .{ ".weba", "audio/webm" },
-    .{ ".webm", "video/webm" },
-    .{ ".webp", "image/webp" },
-    .{ ".woff", "font/woff" },
-    .{ ".woff2", "font/woff2" },
-    .{ ".xhtml", "application/xhtml+xml" },
-    .{ ".xls", "application/vnd.ms-excel" },
-    .{ ".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
-    .{ ".xml", "application/xml  For instance, an Atom feed is application/atom+xml, but application/xml serves as a valid default." },
-    .{ ".xul", "application/vnd.mozilla.xul+xml" },
-    .{ ".zip", "application/zip is the standard, but beware that Windows uploads .zip with MIME type application/x-zip-compressed." },
-    .{ ".7z", "application/x-7z-compressed" },
-    .{ ".aac", "audio/aac" },
-    .{ ".abw", "application/x-abiword" },
-};
-
-/// A StringHashMap containing all the elements of MIMETypes, should be populated before use.
-var MIMETypesMap = std.StringHashMap([]const u8).init(std.heap.page_allocator);
-
-/// Populates the MIMETypesMap StringHashMap.
-/// (Would ideally be done at compile time, but I can't find
-/// a way to do that).
-fn populate_MIME_map() void {
-    for (MIMETypes) |entry| {
-        MIMETypesMap.put(entry[0], entry[1]) catch unreachable;
-    }
-}
 
 /// Defines a header tuple.
 const Header = std.meta.Tuple(&[_]type{ []const u8, []const u8 });
@@ -254,7 +160,7 @@ const HTTPServer = struct {
         var headers_str: []u8 = undefined;
 
         // check if file is of supported type
-        if (MIMETypesMap.get(std.fs.path.extension(config.uri))) |mime_type| {
+        if (mime.get_type(config.uri)) |mime_type| {
             // read the file from the uri
             const file_content = read_file(allocator, config.uri);
 
@@ -297,12 +203,6 @@ const HTTPServer = struct {
         const data = try file.readToEndAlloc(allocator, max_size);
 
         return data;
-    }
-
-    /// Gets the file's MIME type.
-    fn get_MIME_type(path: []const u8) ?[]const u8 {
-        const extension = std.fs.path.extension(path);
-        return MIMETypesMap.get(extension);
     }
 
     /// Handles a bad request
@@ -350,12 +250,8 @@ const HTTPServer = struct {
 };
 
 pub fn main() !void {
-    // populate MIME hashmap.
-    populate_MIME_map();
-    // check that at least HTML was added correctly,
-    // likelihood is the rest of the hashmap was populated
-    // correctly too.
-    std.debug.assert(std.mem.eql(u8, MIMETypesMap.get(".html").?, "text/html"));
+    // checks mime type hashmap is populated with at least HTML.
+    std.debug.assert(std.mem.eql(u8, mime.get_type("index.html").?, "text/html"));
 
     try network.init();
     defer network.deinit();
