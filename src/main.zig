@@ -89,8 +89,6 @@ const HTTPServer = struct {
             var client = try sock.accept();
             defer client.close();
 
-            std.debug.print("Client connected: {any}.\n", .{try client.getLocalEndPoint()});
-
             var recv_buf: [BUF_SIZE]u8 = undefined;
             const len = try client.receive(&recv_buf);
 
@@ -139,7 +137,7 @@ const HTTPServer = struct {
         // appropriate response
         _ = switch (config.method) {
             Method.GET => try self.handle_GET(client, config),
-            Method.UNKNOWN => try self.handle_unknown(client, config),
+            Method.UNKNOWN => try self.handle_unknown(client),
         };
     }
 
@@ -150,8 +148,7 @@ const HTTPServer = struct {
 
     /// Handles a GET request.
     fn handle_GET(self: HTTPServer, client: network.Socket, config: Config) !void {
-        std.debug.print("Found GET from {any}: \n{any}\n", .{ client.getLocalEndPoint(), config });
-        std.debug.print("Get file: {s}\n", .{config.uri});
+        std.debug.print("[GET] -- [{any}] {s}\n", .{ client.getLocalEndPoint(), config.uri });
 
         const allocator = std.heap.page_allocator;
 
@@ -188,7 +185,7 @@ const HTTPServer = struct {
 
         _ = try client.send(response);
 
-        std.debug.print("Sending response: \n{s}\n", .{response});
+        std.debug.print("[{s}] -- [{any}]\n", .{ response_line[0..(response_line.len - 2)], client.getLocalEndPoint() });
     }
 
     /// Reads a file and outputs it's contents.
@@ -206,10 +203,7 @@ const HTTPServer = struct {
     }
 
     /// Handles a bad request
-    fn handle_unknown(self: HTTPServer, client: network.Socket, config: Config) !void {
-        //todo
-        std.debug.print("Unknown from {any}: \n{any}\n", .{ client.endpoint, config });
-
+    fn handle_unknown(self: HTTPServer, client: network.Socket) !void {
         const response_line = try Status.NOT_IMPLEMENTED.response_line();
         const headers_str = try self.get_headers_str(&[_]Header{});
 
@@ -217,7 +211,7 @@ const HTTPServer = struct {
 
         _ = try client.send(response);
 
-        std.debug.print("Sending response: \n{s}\n", .{response});
+        std.debug.print("[{s}] -- [{any}] Unknown / not implemented method.\n", .{ response_line[0..(response_line.len - 2)], client.getLocalEndPoint() });
     }
 
     /// Adds or modifies a header, just a wrapper around self.headers.append.

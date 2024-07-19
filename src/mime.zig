@@ -5,6 +5,9 @@ pub const MIMEType = std.meta.Tuple(&[_]type{ []const u8, []const u8 });
 
 /// Defines the MIME types as a slice of MIMEType tuples.
 const MIMETypes: []const MIMEType = &[_]MIMEType{
+    // give empty string plain type to stop 415 and instead 404 in
+    // specific case with files that don't have an extension
+    .{ "", "text/plain" },
     .{ ".aac", "audio/aac" },
     .{ ".abw", "application/x-abiword" },
     .{ ".apng", "image/apng" },
@@ -84,7 +87,7 @@ const MIMETypes: []const MIMEType = &[_]MIMEType{
     .{ ".abw", "application/x-abiword" },
 };
 
-/// A StringHashMap containing all the elements of MIMETypes, should be populated before use.
+/// A StringHashMap containing all the elements of MIMETypes.
 var MIMETypesMap = std.StringHashMap([]const u8).init(std.heap.page_allocator);
 var map_populated = false;
 
@@ -98,6 +101,7 @@ fn populate_MIME_map() void {
     map_populated = true;
 }
 
+/// Gets the MIME type of the file with the specified path.
 pub fn get_type(path: []const u8) ?[]const u8 {
     if (!map_populated) {
         populate_MIME_map();
